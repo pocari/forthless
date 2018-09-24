@@ -72,12 +72,12 @@ print_char_fd:
     ret
 
 print_newline:
-    mov rsi, 1
+    mov rdi, 1
     jmp print_newline_fd
 
 print_newline_fd:
     mov rsi, rdi
-    mov rdi, 0x000000000000000A
+    mov rdi, 0x0a
     jmp print_char_fd
 
 ; rdi 表示対象の8バイト符号なし整数
