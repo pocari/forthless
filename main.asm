@@ -67,23 +67,27 @@ native 'swap', swap
   jmp next
 
 native '.s', dump_word
-  mov r8, forth_data_stack_start
+  mov r8, [forth_data_stack_start]
+  sub r8, 8
 .loop:
   cmp r8, rsp
-  je .end
+  jb .end
   mov rdi, [r8]
+  push r8
   call print_int
-  mov rdi, 0x20
+  mov rdi, ' '
   call print_char
-  lea r8, [r8 + 8]
-  jmp r8
+  pop r8
+  lea r8, [r8 - 8]
+  jmp .loop
 .end:
-  ret
-
-colon '>', greater
-  dq xt_swap
-  dq xt_less
-  dq retcol
+  call print_newline
+  jmp next
+; 
+; colon '>', greater
+;   dq xt_swap
+;   dq xt_less
+;   dq retcol
 
 extern string_equals
 extern my_exit
@@ -151,14 +155,13 @@ cfa:
   lea r12, [rdi + 8] ;次の要素へのポインタを読み飛ばしてワード文字列のアドレスにセット
   mov rdi, r12
   call string_length
-  lea r12, [r12 + rax + 1 + 1] ;r12の位置から文字列長さ + ヌル文字1byte分 + フラグ1byte分先のアドレス
-  mov rax, r12
+  lea rax, [r12 + rax + 1 + 1] ;r12の位置から文字列長さ + ヌル文字1byte分 + フラグ1byte分先のアドレス
   ret
 
 ; 次のforth実行トークンを実行する
 next:
   mov w, [pc]
-  mov pc, 8
+  add pc, 8
   jmp [w]
 
 ; コロンワードの実行から戻る
@@ -177,9 +180,13 @@ docol:
 
 interpreter_loop:
   mov rdi, input_buf
+  mov rsi, 1024
   call read_word
   mov rdi, rax
+  push rdx
   call print_string
+  call print_newline
+  pop rdx
   ; 読んだ文字列の長さが0なら空文字なので終了
   cmp rdx, 0
   je .empty_word
@@ -205,16 +212,16 @@ interpreter_loop:
   je .not_number
 .read_number:
   push rax
-  ret
+  jmp interpreter_loop
 .not_number:
   mov rdi, unknown_word
   mov rsi, 2
   call print_string_fd
   mov rdi, 2
   call print_newline_fd
-  ret
+  jmp my_exit
 .empty_word:
-  ret
+  jmp my_exit
 
 init:
   mov rstack, return_stack_start
