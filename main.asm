@@ -46,6 +46,22 @@ native '-', minus
   sub [rsp], rax
   jmp next
 
+native '*', multiple
+  pop rdi
+  pop rax
+  mul rdi
+  push rax
+  jmp next
+
+native '/', divide
+  xor rax, rax
+  xor rdx, rdx
+  pop rdi
+  pop rax
+  idiv rdi
+  push rax
+  jmp next
+
 native '<', less
   pop rax
   pop rcx
@@ -83,6 +99,7 @@ native '.s', dump_word
 .end:
   call print_newline
   jmp next
+
 ; 
 ; colon '>', greater
 ;   dq xt_swap
