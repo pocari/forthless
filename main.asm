@@ -113,7 +113,34 @@ native '.s', dump_word
   call print_newline
   jmp next
 
-; 
+native 'and', op_and
+  pop rax
+  pop rdi
+  cmp rax, 0
+  je .false
+  cmp rdi, 0
+  je .false
+.true:
+  push qword 1
+  jmp .end
+.false:
+  push qword 0
+.end:
+  jmp next
+
+native 'not', op_not
+  pop rax
+  cmp rax, 0
+  je .true
+.false:
+  push qword 0
+  jmp .end
+.true:
+  push qword 1
+.end:
+  jmp next
+
+;
 ; colon '>', greater
 ;   dq xt_swap
 ;   dq xt_less
