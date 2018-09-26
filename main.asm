@@ -75,6 +75,19 @@ native '<', less
 .end:
   jmp next
 
+native '=', equals
+  pop rax
+  pop rdi
+  cmp rax, rdi
+  je .equal
+.not_equal:
+  push qword 0
+  jmp .end
+.equal:
+  push qword 1
+.end:
+  jmp next
+
 native 'swap', swap
   pop rax
   pop rcx
