@@ -140,6 +140,33 @@ native 'not', op_not
 .end:
   jmp next
 
+native 'rot', rot
+   pop rax
+   pop rdi
+   pop rcx
+   push rdi
+   push rax
+   push rcx
+   jmp next
+
+native 'dup', dup
+   pop rax
+   push rax
+   push rax
+   jmp next
+
+native 'drop', drop
+   pop rax
+   jmp next
+
+native '.', pop_print
+   pop rdi
+   call print_int
+   call print_newline
+   jmp next
+   
+
+;
 ;
 ; colon '>', greater
 ;   dq xt_swap
