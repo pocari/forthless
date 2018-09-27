@@ -164,9 +164,38 @@ native '.', pop_print
    call print_int
    call print_newline
    jmp next
-   
 
-;
+native 'key', key
+  call read_char
+  and rax, 0xff
+  push rax
+  jmp next
+
+native 'emit', emit
+  pop rdi
+  call print_char
+  call print_newline
+  jmp next
+
+native 'number', number
+  mov rdi, input_buf
+  mov rsi, 1024
+  call read_word
+  cmp rdx, 0
+  jne .read
+  ; 読めなかったので終わる
+  jmp next
+
+.read:
+  mov rdi, rax ; 読んだwordへのポインタ
+  call parse_int
+  cmp rdx, 0
+  jne .read_number
+  ; パースできなければ終わる
+  jmp next
+.read_number:
+  push rax
+  jmp next
 ;
 ; colon '>', greater
 ;   dq xt_swap
@@ -184,6 +213,7 @@ extern print_newline_fd
 extern parse_int
 extern print_int
 extern print_char
+extern read_char
 
 section .data
   last_word: dq prev_word
