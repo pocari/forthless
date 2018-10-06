@@ -196,7 +196,41 @@ native 'number', number
 .read_number:
   push rax
   jmp next
-;
+
+native 'mem', push_mem
+  push forth_memory
+  jmp next
+
+native '!', stack_to_mem_cell
+  xor rax, rax
+  xor rdx, rdx
+  pop rax
+  pop rdx
+  mov [rdx], rax
+  jmp next
+
+native '@', mem_cell_to_stack
+  xor rax, rax
+  pop rax
+  push qword [rax]
+  jmp next
+
+native 'c!', stack_to_mem_byte
+  xor rax, rax
+  xor rdx, rdx
+  pop rax
+  pop rdx
+  and rax, 0xff
+  mov [rdx], ax
+  jmp next
+
+; これよくわからない
+native 'c@', mem_byte_to_stack
+  xor rax, rax
+  pop rax
+  push qword [rax]
+  jmp next
+
 ; colon '>', greater
 ;   dq xt_swap
 ;   dq xt_less
