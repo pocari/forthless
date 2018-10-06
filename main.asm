@@ -236,6 +236,16 @@ colon '>', greater
   dq xt_less
   dq xt_retcol
 
+; andとnotでorを実装する
+; a or b = not((not a) and (not b))
+colon 'or', op_or
+  dq xt_op_not
+  dq xt_swap
+  dq xt_op_not
+  dq xt_op_and
+  dq xt_op_not
+  dq xt_retcol
+
 extern string_equals
 extern my_exit
 extern string_length
