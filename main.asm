@@ -67,11 +67,11 @@ native '<', less
   pop rcx
   cmp rcx, rax
   jl .true
-.true:
-  push qword 1
-  jmp .end
 .false:
   push qword 0
+  jmp .end
+.true:
+  push qword 1
 .end:
   jmp next
 
