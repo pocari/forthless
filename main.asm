@@ -231,10 +231,10 @@ native 'c@', mem_byte_to_stack
   push qword [rax]
   jmp next
 
-; colon '>', greater
-;   dq xt_swap
-;   dq xt_less
-;   dq retcol
+colon '>', greater
+  dq xt_swap
+  dq xt_less
+  dq xt_retcol
 
 extern string_equals
 extern my_exit
@@ -313,7 +313,9 @@ next:
   jmp [w]
 
 ; コロンワードの実行から戻る
-retcol:
+xt_retcol:
+  dq retcol_impl
+retcol_impl:
   mov pc, [rstack]
   add rstack, 8
   jmp next
