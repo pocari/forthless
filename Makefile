@@ -11,3 +11,7 @@ main: main.o lib.o
 
 clean:
 	rm -f main *.o
+
+test: main
+	./test.sh
+
