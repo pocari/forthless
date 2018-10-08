@@ -1,16 +1,19 @@
-%define prev_word 0
+%define PREV_WORD 0
+%define MODE_COMPILE 1
+%define MODE_INTERPRETER 0
+%define WORD_FLAG_IMMEDIATE 0x01
 
 %macro native 3
 section .data
 w_%2:
-  dq prev_word
+  dq PREV_WORD
   db %1, 0
   db %3
 xt_%2:
   dq %2_impl
 section .text
 %2_impl:
-%define prev_word w_%2
+%define PREV_WORD w_%2
 %endmacro
 
 %macro native 2
@@ -20,12 +23,12 @@ native %1, %2, 0
 %macro colon 3
 section .data
 w_%2:
-  dq prev_word
+  dq PREV_WORD
   db %1, 0
   db %3
 xt_%2:
   dq docol
-%define prev_word w_%2
+%define PREV_WORD w_%2
 %endmacro
 
 %macro colon 2
@@ -231,6 +234,58 @@ native 'c@', mem_byte_to_stack
   push qword [rax]
   jmp next
 
+native ':', compile_start
+  mov rdi, input_buf
+  mov rsi, 1024
+  call read_word
+
+  ; 前のワードセット
+  xor r12, r12
+  mov r12, [here]
+  mov rcx, [last_word]
+  mov qword [r12], rcx
+
+  ; このワードの文字列をセット
+  push rdx ; read_wordで読んだ文字列長を退避
+  mov rdi, input_buf
+  lea rsi, [r12 + 8] ; PREV_WORDの次の項目にワード文字列をセット
+  mov rdx, 1024  ;適当にサイズ指定(input_bufが最大収まる感じにする)
+  call string_copy
+  pop rdx
+
+  ; フラグセット
+  mov byte [r12 + 8 + rdx + 1], 0 ; 前のワードへのポインタサイズ(8) + このワードの文字列(rdx + 1)の次にセット
+
+  ; docolセット
+  mov qword [r12 + 8 + rdx + 1 + 1], docol
+
+  ; here 更新
+  lea rcx,  [r12 + 8 + rdx + 1 + 1 + 8]
+  mov [here], rcx
+
+  ; last_word更新
+  mov [last_word], r12
+
+  ; compileモードに遷移
+  mov qword [state], MODE_COMPILE
+
+  jmp next
+
+native ';', compile_end, WORD_FLAG_IMMEDIATE
+  xor rcx, rcx
+
+  ; 今compile中のワードの定義が終了するのでretcolする
+  mov r12, [here]
+  mov qword [r12], xt_retcol
+
+  ; here更新
+  lea rcx, [r12 + 8]
+  mov [here], rcx
+
+  ; interpreterモードに戻る
+  mov qword [state], MODE_INTERPRETER
+  jmp next
+
 colon '>', greater
   dq xt_swap
   dq xt_less
@@ -258,13 +313,12 @@ extern parse_int
 extern print_int
 extern print_char
 extern read_char
+extern string_copy
 
 section .data
-  last_word: dq prev_word
-
   program_stub: dq 0
-  dummy_next: dq xt_interpreter
-  xt_interpreter: dq interpreter_loop
+  dummy_next: dq xt_main_loop
+  xt_main_loop: dq main_loop
 
   unknown_word: db "unknown word.", 0
 
@@ -275,8 +329,12 @@ section .bss
   resq 1023
   return_stack_start: resq 1 ; アドレスの低い方に向かって1024(1023+1)セル分のforthのリターンスタック
   forth_data_stack_start: resq 1 ; データスタックの先頭
-  forth_memory: resq 65536
-  input_buf: resb 1024
+  forth_memory: resq 65536 ; ユーザ用メモリ
+  forth_word_memory: resq 65536 ; ユーザ定義ワード用のメモリ
+  here: resq 1 ; forth_word_memoryの最初の空きメモリへのポインタ
+  last_word: resq 1 ; 最後のワードへのポインタ
+  state: resq 1
+  input_buf: resb 1024 ; read_wordの読み込みバッファ
 
 global _start
 section .text
@@ -309,11 +367,16 @@ find_word:
 ;  rdi: ワードヘッダのアドレス
 ; 戻り値
 ;  rax: 対象ワードの実行トークンのアドレス
+;  rdx: このトークンのフラグ値
 cfa:
   lea r12, [rdi + 8] ;次の要素へのポインタを読み飛ばしてワード文字列のアドレスにセット
   mov rdi, r12
   call string_length
-  lea rax, [r12 + rax + 1 + 1] ;r12の位置から文字列長さ + ヌル文字1byte分 + フラグ1byte分先のアドレス
+  xor rdx, rdx
+  lea rdx, [r12 + rax + 1] ;r12の位置から文字列長さ + ヌル文字1byte分
+  lea rax, [rdx + 1] ;フラグから1byte分先のアドレス
+  mov rdx, [rdx] ; rdxにはフラグの値自体をセット
+  and rdx, 0xff ;1byteのみ取る
   ret
 
 ; 次のforth実行トークンを実行する
@@ -338,12 +401,78 @@ docol:
   mov pc, w
   jmp next
 
-interpreter_loop:
+main_loop:
+  cmp qword [state], MODE_INTERPRETER
+  je .exec_interpreter
+.exec_compiler:
+  jmp compiler_loop
+.exec_interpreter:
+  jmp interpreter_loop
+
+compiler_loop:
+  ; ワードを読む
   mov rdi, input_buf
   mov rsi, 1024
   call read_word
   mov rdi, rax
-  push rdx
+
+  ; 読んだ文字列の長さが0なら空文字なので終了
+  cmp rdx, 0
+  je .empty_word
+
+  ; 読んだワードが辞書に登録されているかどうかチェック
+  mov rdi, input_buf
+  call find_word
+
+  cmp rax, 0
+  je .word_not_found
+.word_found:
+  ; 読んだワード(rax)に対応するxtを検索
+  mov rdi, rax
+  call cfa
+  cmp rdx, WORD_FLAG_IMMEDIATE
+  je .run_immediate
+.run_not_immediate:
+  mov r12, [here]
+  mov [r12], rax
+  lea rcx, [r12 + 8]
+  mov [here], rcx
+  jmp compiler_loop
+
+.run_immediate:
+  mov [program_stub], rax
+  mov pc, program_stub
+  jmp next
+
+.word_not_found:
+  mov rdi, input_buf
+  call parse_int
+
+  ;数値としてパースできた文字列が存在するかチェック
+  cmp rdx, 0
+  je .not_number
+.read_number:
+  push rax
+  jmp main_loop
+.not_number:
+  mov rdi, unknown_word
+  mov rsi, 2
+  call print_string_fd
+  mov rdi, 2
+  call print_newline_fd
+  jmp my_exit
+.empty_word:
+  jmp my_exit
+
+interpreter_loop:
+  ; ワードを読む
+  mov rdi, input_buf
+  mov rsi, 1024
+  call read_word
+  mov rdi, rax
+
+  ; 読んだワードをechoする
+  push rdx ; read_wordで読んだ文字数退避
   call print_string
   call print_newline
   pop rdx
@@ -358,8 +487,10 @@ interpreter_loop:
   cmp rax, 0
   je .word_not_found
 .word_found:
+  ; 読んだワード(rax)に対応するxtを検索
   mov rdi, rax
   call cfa
+
   mov [program_stub], rax
   mov pc, program_stub
   jmp next
@@ -372,7 +503,7 @@ interpreter_loop:
   je .not_number
 .read_number:
   push rax
-  jmp interpreter_loop
+  jmp main_loop
 .not_number:
   mov rdi, unknown_word
   mov rsi, 2
@@ -387,6 +518,9 @@ init:
   mov rstack, return_stack_start
   mov [forth_data_stack_start], rsp
   mov pc, dummy_next
+  mov qword [here], forth_word_memory
+  mov qword [last_word], PREV_WORD
+  mov qword [state], MODE_INTERPRETER
   jmp next
 
 _start:
