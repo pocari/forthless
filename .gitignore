@@ -1,3 +1,6 @@
 *.o
 main
+dat.txt
+gdb.in
+main.expanded.asm
 
