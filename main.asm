@@ -281,9 +281,15 @@ native ';', compile_end, WORD_FLAG_IMMEDIATE
   ; here更新
   lea rcx, [r12 + 8]
   mov [here], rcx
-
   ; interpreterモードに戻る
   mov qword [state], MODE_INTERPRETER
+  jmp next
+
+native 'lit', lit
+  ; この命令自体の次のpcの位置にスタックに積むべき数値があるのでそれを取得
+  push qword [pc]
+  ; プログラムカウンタも変更する
+  add pc, 8
   jmp next
 
 colon '>', greater
@@ -397,7 +403,7 @@ retcol_impl:
 docol:
   sub rstack, 8
   mov [rstack], pc
-  add w, 8
+  add w, 8 ; この時点のwはdocolを呼んだ場所のアドレスがセットされている
   mov pc, w
   jmp next
 
@@ -452,7 +458,20 @@ compiler_loop:
   cmp rdx, 0
   je .not_number
 .read_number:
-  push rax
+  mov r12, [here]
+  mov qword [r12], xt_lit ;数字をstackに積むためのxt_lit命令をセット
+
+  ; hereを更新
+  lea rcx, [r12 + 8]
+  mov [here], rcx
+
+  mov r12, [here]
+  mov [r12], rax ; xt_litでstckに積む文字をセット
+
+  ; hereを更新
+  lea rcx, [r12 + 8]
+  mov [here], rcx
+
   jmp main_loop
 .not_number:
   mov rdi, unknown_word

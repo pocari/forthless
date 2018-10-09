@@ -284,5 +284,15 @@ my_command
 "
 expect "$command" "-1"
 
+#--------------------------
+command="\
+: my_command swap 8 + - ;
+2
+3
+my_command
+.
+"
+expect "$command" "-7"
+
 echo
 
